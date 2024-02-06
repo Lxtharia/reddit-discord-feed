@@ -20,21 +20,17 @@ async fn main() {
 }
 
 
+
 async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str) -> Result<(),reqwest::Error> {
-    let body = client.get(reddit_url).send()
+    // Download the rss file and convert it to text
+    let body: String = client.get(reddit_url).send()
         .await?
         .text()
         .await?;
 
     // parsing
-    let reader = EventReader::from_str(&body);
-    parse_xml(&reader);
+    let (author, author_url, post_title, post_url, image_url) = parse_xml(&body);
 
-    let autor = "u/Maud-Lin";
-    let autor_url = "https://www.reddit.com/r/schkreckl";
-    let post_title = "Amazon??!";
-    let post_url = "https://www.reddit.com/r/schkreckl/comments/7fhbvk/schkreckl/";
-    let image_url = "https://i.redd.it/lzeskuzq96001.jpg";
 
     // Creating a json body to send to discord
     let data = json!({
@@ -50,7 +46,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
             "fields": [
                 {
                     "name": "Autor",
-                    "value": format!("[{}]({})", autor, autor_url),
+                    "value": format!("[{}]({})", author, author_url),
                 },
             ],
             "title": post_title,
@@ -60,6 +56,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
         ]
     });
 
+    // Post json data to the discord webhook url
     let res = client.post(webhook_url)
         .json(&data)
         .send()
@@ -69,7 +66,14 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
 }
 
 
-fn parse_xml(reader: &EventReader<&[u8]>) -> () {
+fn parse_xml(body: &str) -> (String, String, String, String, String) {
+    let reader = EventReader::from_str(&body);
 
+    let author = "u/Maud-Lin";
+    let author_url = "https://www.reddit.com/r/schkreckl";
+    let post_title = "Amazon??!";
+    let post_url = "https://www.reddit.com/r/schkreckl/comments/7fhbvk/schkreckl/";
+    let image_url = "https://i.redd.it/lzeskuzq96001.jpg";
+    return (author.to_string(), author_url.to_string(), post_title.to_string(), post_url.to_string(), image_url.to_string());
 }
 
