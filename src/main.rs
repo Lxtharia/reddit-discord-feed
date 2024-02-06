@@ -1,14 +1,21 @@
+use dotenv::dotenv;
 use reqwest;
 use serde_json::json;
 use xml::reader::EventReader;
 
 #[tokio::main]
 async fn main() {
+
+    // read feed and webhook url from .env file
+    dotenv().ok();
+    let rss_url = std::env::var("RSS_URL").expect("RSS_URL must be set");
+    let webhook_url = std::env::var("WEBHOOK_URL").expect("WEBHOOK_URL must be set");
+
     // Create a http client
     let client = reqwest::Client::new();
 
     // process a feed, once
-    let _ = process_feed(client, "https://www.reddit.com/r/schkreckl.rss", "https://discord.com/api/webhooks/894348357592559618/bCpUzEfUcZjcx2Gw4T28SQccWCpwrQzn7ssj8_rYJ-H278jZwfXDpBTubexkSMdSdxTe").await;
+    let _ = process_feed(client, &rss_url, &webhook_url).await;
 
 }
 
