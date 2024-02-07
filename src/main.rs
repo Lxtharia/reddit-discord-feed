@@ -69,9 +69,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
             },
             ]
         });
-
         println!("{:?}", data);
-
     }
 
     return Ok(());
@@ -86,6 +84,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
     Ok(())
 }
 
+#[derive(Clone)]
 struct RedditPost {
     time: u64,
     title: String,
@@ -107,47 +106,56 @@ fn parse_xml(body: &str) -> Vec<RedditPost> {
 
     for trunk in root.children() {
         if trunk.is("entry", namespace) {
-            // Defaults?
-            let mut post_time = 0;
+
+            // Defaults
+            let mut time = 0;
+            let mut title = "[Kein Titel]".to_string();
+            let mut url = "".to_string();
             let mut author = "u/?".to_string();
             let mut author_url = "".to_string();
-            let mut post_title = "[Titel]".to_string();
-            let mut post_url = "".to_string();
             let mut image_url = "".to_string();
+
             // processing an entry
             for child in trunk.children() {
 
                 if child.is("author", namespace) {
-                    author = match child.get_child("name", namespace){
-                                None => author,
-                                Some(elem) => elem.text()
-                            };
-                    author_url = match child.get_child("uri", namespace) {
-                                None => author_url,
-                                Some(elem) => elem.text()
-                            };
+                    match child.get_child("name", namespace){
+                        Some(elem) => author = elem.text(),
+                        None => (),
+                    };
+                    match child.get_child("uri", namespace) {
+                        Some(elem) => author_url = elem.text(),
+                        None => (),
+                    };
                 } else if child.is("link", namespace) {
-                    post_url = child.attr("href").unwrap_or(&post_url).to_string();
+                    match child.attr("href"){
+                        Some(elem) => url = elem.to_string(),
+                        None => (),
+                    };
                 } else if child.is("published", namespace) {
                     let post_time_string = child.text();
 
                 } else if child.is("title", namespace) {
-                    post_title = child.text();
+                    title = child.text();
                 } else if child.is("thumbnail", namespace) {
-                    image_url = child.attr("url").unwrap_or(&image_url).to_string();
+                    match child.attr("url") {
+                        Some(elem) => image_url = elem.to_string(),
+                        None => (),
+                    }
                 }
-
             }
-            posts.push(
+
+            // Add new object to list
+            posts.push( 
                 RedditPost {
-                    time: post_time,
-                    title: post_title,
-                    url: post_url,
+                    time: time,
+                    title: title,
+                    url: url,
                     author: author,
                     author_url: author_url,
                     image_url: image_url,
-                }
-            );
+                });
+
         }
     }
 
