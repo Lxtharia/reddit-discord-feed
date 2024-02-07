@@ -1,7 +1,11 @@
+#![allow(unused_imports)]
+#![allow(unused_variables)]
+#![allow(unreachable_code)]
+
 use dotenv::dotenv;
 use reqwest;
 use serde_json::json;
-use xml::reader::EventReader;
+use minidom::Element;
 
 #[tokio::main]
 async fn main() {
@@ -11,8 +15,17 @@ async fn main() {
     let rss_url = std::env::var("RSS_URL").expect("RSS_URL must be set");
     let webhook_url = std::env::var("WEBHOOK_URL").expect("WEBHOOK_URL must be set");
 
+    // Name your user agent after your app?
+    static APP_USER_AGENT: &str = concat!(
+        env!("CARGO_PKG_NAME"),
+        "/",
+        env!("CARGO_PKG_VERSION"),
+    );
+
     // Create a http client
-    let client = reqwest::Client::new();
+    let client = reqwest::ClientBuilder::new()
+        .user_agent(APP_USER_AGENT)
+        .build().unwrap();
 
     // process a feed, once
     let _ = process_feed(client, &rss_url, &webhook_url).await;
@@ -29,7 +42,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
         .await?;
 
     // parsing
-    let (author, author_url, post_title, post_url, image_url) = parse_xml(&body);
+    let (post_time, author, author_url, post_title, post_url, image_url) = parse_xml(&body);
 
 
     // Creating a json body to send to discord
@@ -56,6 +69,10 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
         ]
     });
 
+    println!("{:?}", data);
+
+    return Ok(());
+
     // Post json data to the discord webhook url
     let res = client.post(webhook_url)
         .json(&data)
@@ -66,14 +83,41 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
 }
 
 
-fn parse_xml(body: &str) -> (String, String, String, String, String) {
-    let reader = EventReader::from_str(&body);
+fn parse_xml(body: &str) -> (u64, String, String, String, String, String) {
 
-    let author = "u/Maud-Lin";
-    let author_url = "https://www.reddit.com/r/schkreckl";
-    let post_title = "Amazon??!";
-    let post_url = "https://www.reddit.com/r/schkreckl/comments/7fhbvk/schkreckl/";
-    let image_url = "https://i.redd.it/lzeskuzq96001.jpg";
-    return (author.to_string(), author_url.to_string(), post_title.to_string(), post_url.to_string(), image_url.to_string());
+    println!("Body: {:?}", body);
+
+    let namespace = "http://www.w3.org/2005/Atom";
+    let root: Element = body.parse().unwrap();
+
+    // Defaults?
+    let mut post_time = 0;
+    let mut author = "u/?".to_string();
+    let mut author_url = "".to_string();
+    let mut post_title = "[Titel]".to_string();
+    let mut post_url = "".to_string();
+    let mut image_url = "".to_string();
+
+    for trunk in root.children() {
+        if trunk.is("entry", namespace) {
+            for child in trunk.children() {
+                if child.is("author", namespace) {
+                    author = child.get_child("name", namespace).unwrap().text();
+                    author_url = child.get_child("uri", namespace).unwrap().text();
+                } else if child.is("link", namespace) {
+                    post_url = child.attr("href").unwrap().to_string();
+                } else if child.is("published", namespace) {
+                    let post_time_string = child.text();
+
+                } else if child.is("title", namespace) {
+                    post_title = child.text();
+                } else if child.is("thumbnail", namespace) {
+                    image_url = child.attr("url").unwrap().to_string();
+                }
+            }
+        }
+    }
+
+    return (post_time, author, author_url, post_title, post_url, image_url);
 }
 
