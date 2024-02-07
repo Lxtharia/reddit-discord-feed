@@ -43,11 +43,12 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
 
     // parsing
     let posts = parse_xml(&body);
+    let mut data = json!({});
 
-    for post in posts {
+    for post in posts.iter().rev() {
 
         // Creating a json body to send to discord
-        let data = json!({
+        data = json!({
             "username": "Schkreckl",
             "avatar_url": "https://styles.redditmedia.com/t5_4bnl6/styles/communityIcon_zimq8fp2clp11.png",
             "embeds": [
@@ -69,12 +70,9 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
             },
             ]
         });
-        println!("{:?}", data);
+        println!("POST: {:?}", data);
     }
 
-    return Ok(());
-
-    let data = json!({});
     // Post json data to the discord webhook url
     let res = client.post(webhook_url)
         .json(&data)
@@ -97,9 +95,10 @@ struct RedditPost {
 
 fn parse_xml(body: &str) -> Vec<RedditPost> {
 
-    println!("Body: {:?}", body);
+    println!("BODY: {:?}", body);
 
     let namespace = "http://www.w3.org/2005/Atom";
+    let media_namespace = "http://search.yahoo.com/mrss/";
     let root: Element = body.parse().unwrap();
 
     let mut posts: Vec<RedditPost> = Vec::new();
@@ -137,7 +136,7 @@ fn parse_xml(body: &str) -> Vec<RedditPost> {
 
                 } else if child.is("title", namespace) {
                     title = child.text();
-                } else if child.is("thumbnail", namespace) {
+                } else if child.is("thumbnail", media_namespace) {
                     match child.attr("url") {
                         Some(elem) => image_url = elem.to_string(),
                         None => (),
