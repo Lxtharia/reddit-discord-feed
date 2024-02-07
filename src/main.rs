@@ -42,37 +42,41 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
         .await?;
 
     // parsing
-    let (post_time, author, author_url, post_title, post_url, image_url) = parse_xml(&body);
+    let posts = parse_xml(&body);
 
+    for post in posts {
 
-    // Creating a json body to send to discord
-    let data = json!({
-        "username": "Schkreckl",
-        "avatar_url": "https://styles.redditmedia.com/t5_4bnl6/styles/communityIcon_zimq8fp2clp11.png",
-        "embeds": [
-        {
-            "color": 19608,
-            "author": {
-                "name": "Neuer Post auf Schkreckl!",
-                "url": "https://www.reddit.com/r/schkreckl",
-            },
-            "fields": [
-                {
-                    "name": "Autor",
-                    "value": format!("[{}]({})", author, author_url),
+        // Creating a json body to send to discord
+        let data = json!({
+            "username": "Schkreckl",
+            "avatar_url": "https://styles.redditmedia.com/t5_4bnl6/styles/communityIcon_zimq8fp2clp11.png",
+            "embeds": [
+            {
+                "color": 19608,
+                "author": {
+                    "name": "Neuer Post auf Schkreckl!",
+                    "url": "https://www.reddit.com/r/schkreckl",
                 },
-            ],
-            "title": post_title,
-            "url": post_url,
-            "image": { "url": image_url },
-        },
-        ]
-    });
+                "fields": [
+                    {
+                        "name": "Autor",
+                        "value": format!("[{}]({})", post.author, post.author_url),
+                    },
+                ],
+                "title": post.title,
+                "url": post.url,
+                "image": { "url": post.image_url },
+            },
+            ]
+        });
 
-    println!("{:?}", data);
+        println!("{:?}", data);
+
+    }
 
     return Ok(());
 
+    let data = json!({});
     // Post json data to the discord webhook url
     let res = client.post(webhook_url)
         .json(&data)
@@ -82,42 +86,71 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
     Ok(())
 }
 
+struct RedditPost {
+    time: u64,
+    title: String,
+    url: String,
+    author: String,
+    author_url: String,
+    image_url: String,
+}
 
-fn parse_xml(body: &str) -> (u64, String, String, String, String, String) {
+
+fn parse_xml(body: &str) -> Vec<RedditPost> {
 
     println!("Body: {:?}", body);
 
     let namespace = "http://www.w3.org/2005/Atom";
     let root: Element = body.parse().unwrap();
 
-    // Defaults?
-    let mut post_time = 0;
-    let mut author = "u/?".to_string();
-    let mut author_url = "".to_string();
-    let mut post_title = "[Titel]".to_string();
-    let mut post_url = "".to_string();
-    let mut image_url = "".to_string();
+    let mut posts: Vec<RedditPost> = Vec::new();
 
     for trunk in root.children() {
         if trunk.is("entry", namespace) {
+            // Defaults?
+            let mut post_time = 0;
+            let mut author = "u/?".to_string();
+            let mut author_url = "".to_string();
+            let mut post_title = "[Titel]".to_string();
+            let mut post_url = "".to_string();
+            let mut image_url = "".to_string();
+            // processing an entry
             for child in trunk.children() {
+
                 if child.is("author", namespace) {
-                    author = child.get_child("name", namespace).unwrap().text();
-                    author_url = child.get_child("uri", namespace).unwrap().text();
+                    author = match child.get_child("name", namespace){
+                                None => author,
+                                Some(elem) => elem.text()
+                            };
+                    author_url = match child.get_child("uri", namespace) {
+                                None => author_url,
+                                Some(elem) => elem.text()
+                            };
                 } else if child.is("link", namespace) {
-                    post_url = child.attr("href").unwrap().to_string();
+                    post_url = child.attr("href").unwrap_or(&post_url).to_string();
                 } else if child.is("published", namespace) {
                     let post_time_string = child.text();
 
                 } else if child.is("title", namespace) {
                     post_title = child.text();
                 } else if child.is("thumbnail", namespace) {
-                    image_url = child.attr("url").unwrap().to_string();
+                    image_url = child.attr("url").unwrap_or(&image_url).to_string();
                 }
+
             }
+            posts.push(
+                RedditPost {
+                    time: post_time,
+                    title: post_title,
+                    url: post_url,
+                    author: author,
+                    author_url: author_url,
+                    image_url: image_url,
+                }
+            );
         }
     }
 
-    return (post_time, author, author_url, post_title, post_url, image_url);
+    return posts;
 }
 
