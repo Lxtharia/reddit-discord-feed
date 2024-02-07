@@ -6,6 +6,7 @@ use dotenv::dotenv;
 use reqwest;
 use serde_json::json;
 use minidom::Element;
+use chrono::{DateTime};
 
 #[tokio::main]
 async fn main() {
@@ -28,13 +29,13 @@ async fn main() {
         .build().unwrap();
 
     // process a feed, once
-    let _ = process_feed(client, &rss_url, &webhook_url).await;
+    let _ = process_feed(client, &rss_url, &webhook_url, 1707255513).await;
 
 }
 
 
 
-async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str) -> Result<(),reqwest::Error> {
+async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_send: i64) -> Result<(),reqwest::Error> {
     // Download the rss file and convert it to text
     let body: String = client.get(reddit_url).send()
         .await?
@@ -46,6 +47,11 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
     let mut data = json!({});
 
     for post in posts.iter().rev() {
+
+        // If the post was posted earlier than the last time we checked we shouldve processed it already
+        if post.timestamp <= time_last_post_send {
+            continue;
+        }
 
         // Creating a json body to send to discord
         data = json!({
@@ -84,7 +90,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
 
 #[derive(Clone)]
 struct RedditPost {
-    time: u64,
+    timestamp: i64,
     title: String,
     url: String,
     author: String,
@@ -107,7 +113,7 @@ fn parse_xml(body: &str) -> Vec<RedditPost> {
         if trunk.is("entry", namespace) {
 
             // Defaults
-            let mut time = 0;
+            let mut timestamp = 0;
             let mut title = "[Kein Titel]".to_string();
             let mut url = "".to_string();
             let mut author = "u/?".to_string();
@@ -133,6 +139,7 @@ fn parse_xml(body: &str) -> Vec<RedditPost> {
                     };
                 } else if child.is("published", namespace) {
                     let post_time_string = child.text();
+                    timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%z").unwrap().timestamp();
 
                 } else if child.is("title", namespace) {
                     title = child.text();
@@ -147,7 +154,7 @@ fn parse_xml(body: &str) -> Vec<RedditPost> {
             // Add new object to list
             posts.push( 
                 RedditPost {
-                    time: time,
+                    timestamp: timestamp,
                     title: title,
                     url: url,
                     author: author,
