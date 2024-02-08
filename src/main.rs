@@ -10,12 +10,12 @@ use dotenv::dotenv;
 use minidom::Element;
 use reqwest;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct Config {
     feeds: Vec<Feed>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct Feed {
     name: String,
     rss_url: String,
@@ -23,25 +23,23 @@ struct Feed {
     time_last_post_sent: i64,
 }
 
-fn load_feeds(filename: &str) -> Vec<Feed> {
+fn load_config(filename: &str) -> Config {
     let config: Config = toml::from_str(r#"
         [[feeds]]
         name = "Schkreckl"
-        rss_url = "https://www.reddit.com/r/schkreckl.rss"
+        rss_url = "https://www.reddit.com/r/schkreckl.rss?sort=new"
         webhook_url = "https://discord.com/api/webhooks/894348357592559618/bCpUzEfUcZjcx2Gw4T28SQccWCpwrQzn7ssj8_rYJ-H278jZwfXDpBTubexkSMdSdxTe"
-        time_last_post_sent = 1707255513
+        time_last_post_sent = 1707305510
     "#).unwrap();
 
-    return config.feeds;
-    
-
+    return config;
 }
 
 #[tokio::main]
 async fn main() {
 
     // read feed and webhook url from config file
-    let feeds = load_feeds("config.toml");
+    let mut config = load_config("config.toml");
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
@@ -55,10 +53,22 @@ async fn main() {
         .user_agent(APP_USER_AGENT)
         .build().unwrap();
 
-    for mut feed in feeds {
-        // process a feed, once
-        println!("==== Processing feed {} =====", &feed.name);
-        let _ = process_feed(&client, &mut feed).await;
+    // Process all the feeds and update the config after each one
+    for i in 0..config.feeds.len() {
+        let oldtoml = toml::to_string(&config.clone()).unwrap();
+
+        let mut_feed = &mut config.feeds[i];
+        println!("==== Processing feed [[ {} ]] =====", mut_feed.name);
+
+        println!("OLD TOML: {}", oldtoml);
+
+        match process_feed(&client, mut_feed).await {
+            Err(err) => { println!("Couldn't send url. {}", err); }
+            _ => ()
+        }
+
+        let newtoml = toml::to_string(&config).unwrap();
+        println!("NEW TOML: {}", newtoml);
     }
 
 }
@@ -105,19 +115,18 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
             ]
         });
 
-        println!("----- Processing Post: {:?} -----", data);
+        println!("----- Sending post:\n {:?}", post);
+        println!("-----");
 
         // Post json data to the discord webhook url
         let res = client.post(&feed.webhook_url)
             .json(&data)
             .send()
-            .await?;
+            .await?; // This exits on error (for example if the url is invalid)
 
         if res.status().is_success() {
-            println!("Timestamp of last post sent{:?}", post.timestamp);
+            // Change the timestamp in the feed object
             feed.time_last_post_sent = post.timestamp;
-            // TODO: write this to a persistant file, even if the program crashes.
-
         }
 
         // Wait a bit to prevent getting rate limited
@@ -129,7 +138,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
     Ok(())
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct RedditPost {
     timestamp: i64,
     title: String,
