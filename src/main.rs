@@ -23,6 +23,16 @@ struct Feed {
     time_last_post_sent: i64,
 }
 
+#[derive(Clone, Debug)]
+struct RedditPost {
+    timestamp: i64,
+    title: String,
+    url: String,
+    author: String,
+    author_url: String,
+    image_url: String,
+}
+
 fn load_config(filename: &str) -> Config {
     let config: Config = toml::from_str(r#"
         [[feeds]]
@@ -63,7 +73,7 @@ async fn main() {
         println!("OLD TOML: {}", oldtoml);
 
         match process_feed(&client, mut_feed).await {
-            Err(err) => { println!("Couldn't send url. {}", err); }
+            Err(err) => { println!("Couldn't process feed. {}", err); }
             _ => ()
         }
 
@@ -84,7 +94,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
     // parsing
     let posts = parse_xml(&body);
 
-    for post in posts.iter().rev() {
+    for post in posts.iter().sort_by_key(|p| p.timestamp ).rev() {
 
         // If the post was posted earlier than the last time we checked we shouldve processed it already
         if post.timestamp <= feed.time_last_post_sent {
@@ -122,7 +132,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         let res = client.post(&feed.webhook_url)
             .json(&data)
             .send()
-            .await?; // This exits on error (for example if the url is invalid)
+            .await?; // This exits the function on error (for example if the url is invalid)
 
         if res.status().is_success() {
             // Change the timestamp in the feed object
@@ -134,18 +144,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
 
     }
 
-
     Ok(())
-}
-
-#[derive(Clone, Debug)]
-struct RedditPost {
-    timestamp: i64,
-    title: String,
-    url: String,
-    author: String,
-    author_url: String,
-    image_url: String,
 }
 
 
