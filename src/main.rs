@@ -2,19 +2,46 @@
 #![allow(unused_variables)]
 #![allow(unreachable_code)]
 
-use dotenv::dotenv;
-use reqwest;
+use serde::{Serialize, Deserialize};
 use serde_json::json;
-use minidom::Element;
 use chrono::{DateTime};
+use toml::Table;
+use dotenv::dotenv;
+use minidom::Element;
+use reqwest;
+
+#[derive(Deserialize)]
+struct Config {
+    feeds: Vec<Feed>,
+}
+
+#[derive(Deserialize)]
+struct Feed {
+    name: String,
+    rss_url: String,
+    webhook_url: String,
+    time_last_post_sent: i64,
+}
+
+fn load_feeds(filename: &str) -> Vec<Feed> {
+    let config: Config = toml::from_str(r#"
+        [[feeds]]
+        name = "Schkreckl"
+        rss_url = "https://www.reddit.com/r/schkreckl.rss"
+        webhook_url = "https://discord.com/api/webhooks/894348357592559618/bCpUzEfUcZjcx2Gw4T28SQccWCpwrQzn7ssj8_rYJ-H278jZwfXDpBTubexkSMdSdxTe"
+        time_last_post_sent = 1707255513
+    "#).unwrap();
+
+    return config.feeds;
+    
+
+}
 
 #[tokio::main]
 async fn main() {
 
-    // read feed and webhook url from .env file
-    dotenv().ok();
-    let rss_url = std::env::var("RSS_URL").expect("RSS_URL must be set");
-    let webhook_url = std::env::var("WEBHOOK_URL").expect("WEBHOOK_URL must be set");
+    // read feed and webhook url from config file
+    let feeds = load_feeds("config.toml");
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
@@ -28,13 +55,16 @@ async fn main() {
         .user_agent(APP_USER_AGENT)
         .build().unwrap();
 
-    // process a feed, once
-    let _ = process_feed(client, &rss_url, &webhook_url, 1707255513).await;
+    for feed in feeds {
+        // process a feed, once
+        println!("==== Processing feed {} =====", &feed.name);
+        let _ = process_feed(&client, &feed.rss_url, &feed.webhook_url, feed.time_last_post_sent).await;
+    }
 
 }
 
 
-async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_sent: i64) -> Result<(),reqwest::Error> {
+async fn process_feed(client: &reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_sent: i64) -> Result<(),reqwest::Error> {
     // Download the rss file and convert it to text
     let body: String = client.get(reddit_url).send()
         .await?
@@ -43,7 +73,6 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
 
     // parsing
     let posts = parse_xml(&body);
-    let mut data = json!({});
 
     for post in posts.iter().rev() {
 
@@ -53,7 +82,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
         }
 
         // Creating a json body to send to discord
-        data = json!({
+        let data = json!({
             "username": "Schkreckl",
             "avatar_url": "https://styles.redditmedia.com/t5_4bnl6/styles/communityIcon_zimq8fp2clp11.png",
             "embeds": [
@@ -76,9 +105,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
             ]
         });
 
-        println!("POST: {:?}", data);
-
-
+        println!("----- Processing Post: {:?} -----", data);
 
         // Post json data to the discord webhook url
         let res = client.post(webhook_url)
@@ -113,8 +140,6 @@ struct RedditPost {
 
 
 fn parse_xml(body: &str) -> Vec<RedditPost> {
-
-    println!("BODY: {:?}", body);
 
     let namespace = "http://www.w3.org/2005/Atom";
     let media_namespace = "http://search.yahoo.com/mrss/";
