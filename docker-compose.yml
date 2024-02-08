@@ -6,3 +6,4 @@ services:
         restart: unless-stopped
         volumes:
             - ./config.toml:/code/config.toml
+            - ./cronfile:/etc/cron.d/feed_cron
