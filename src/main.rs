@@ -2,6 +2,7 @@
 #![allow(unused_variables)]
 #![allow(unreachable_code)]
 
+use std::{io,fs, error::Error};
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use chrono::{DateTime};
@@ -33,23 +34,25 @@ struct RedditPost {
     image_url: String,
 }
 
-fn load_config(filename: &str) -> Config {
-    let config: Config = toml::from_str(r#"
-        [[feeds]]
-        name = "Schkreckl"
-        rss_url = "https://www.reddit.com/r/schkreckl.rss?sort=new"
-        webhook_url = "https://discord.com/api/webhooks/894348357592559618/bCpUzEfUcZjcx2Gw4T28SQccWCpwrQzn7ssj8_rYJ-H278jZwfXDpBTubexkSMdSdxTe"
-        time_last_post_sent = 1707305510
-    "#).unwrap();
+fn load_config(filepath: &str) -> Result<Config, Box<dyn Error>> {
+    let config: Config = toml::from_str( &fs::read_to_string(filepath)? )?;
+    return Ok(config);
 
-    return config;
+}
+
+fn write_config(filepath: &str, config: &Config) -> Result<(), Box<dyn Error>> {
+    fs::write( filepath, toml::to_string(&config)? )?;
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
 
-    // read feed and webhook url from config file
-    let mut config = load_config("config.toml");
+    // Path to config file
+    const CONFIGFILE: &str = "config.toml";
+
+    // read feed- and webhook-url from config file
+    let mut config = load_config(CONFIGFILE).expect("Error reading config file");
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
@@ -79,6 +82,7 @@ async fn main() {
 
         let newtoml = toml::to_string(&config).unwrap();
         println!("NEW TOML: {}", newtoml);
+        write_config(CONFIGFILE, &config).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
     }
 
 }
@@ -92,10 +96,10 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         .await?;
 
     // parsing
-    let posts = parse_xml(&body);
+    let mut posts = parse_xml(&body);
+    posts.sort_by_key(|p| p.timestamp);
 
-    for post in posts.iter().sort_by_key(|p| p.timestamp ).rev() {
-
+    for post in posts {
         // If the post was posted earlier than the last time we checked we shouldve processed it already
         if post.timestamp <= feed.time_last_post_sent {
             continue;
@@ -140,7 +144,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         }
 
         // Wait a bit to prevent getting rate limited
-        std::thread::sleep(std::time::Duration::from_millis(1000));
+        std::thread::sleep(std::time::Duration::from_millis(2000));
 
     }
 
