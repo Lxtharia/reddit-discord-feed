@@ -34,8 +34,7 @@ async fn main() {
 }
 
 
-
-async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_send: i64) -> Result<(),reqwest::Error> {
+async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_sent: i64) -> Result<(),reqwest::Error> {
     // Download the rss file and convert it to text
     let body: String = client.get(reddit_url).send()
         .await?
@@ -49,7 +48,7 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
     for post in posts.iter().rev() {
 
         // If the post was posted earlier than the last time we checked we shouldve processed it already
-        if post.timestamp <= time_last_post_send {
+        if post.timestamp <= time_last_post_sent {
             continue;
         }
 
@@ -76,14 +75,28 @@ async fn process_feed(client: reqwest::Client, reddit_url: &str, webhook_url: &s
             },
             ]
         });
+
         println!("POST: {:?}", data);
+
+
+
+        // Post json data to the discord webhook url
+        let res = client.post(webhook_url)
+            .json(&data)
+            .send()
+            .await?;
+
+        if res.status().is_success() {
+            let new_time_last_post_sent = post.timestamp;
+            println!("Timestamp of last post sent{:?}", new_time_last_post_sent);
+            // TODO: write this to a persistant file, even if the program crashes.
+        }
+
+        // Wait a bit to prevent getting rate limited
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+
     }
 
-    // Post json data to the discord webhook url
-    let res = client.post(webhook_url)
-        .json(&data)
-        .send()
-        .await?;
 
     Ok(())
 }
