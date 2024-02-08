@@ -1,13 +1,8 @@
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-#![allow(unreachable_code)]
-
-use std::{io,fs, error::Error};
+use std::fs;
+use std::error::Error;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use chrono::{DateTime};
-use toml::Table;
-use dotenv::dotenv;
 use minidom::Element;
 use reqwest;
 
@@ -56,13 +51,11 @@ async fn main() {
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
-        env!("CARGO_PKG_NAME"),
-        "/",
-        env!("CARGO_PKG_VERSION"),
+        env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"),
     );
 
     // Create a http client
-    let client = reqwest::ClientBuilder::new()
+    let http_client = reqwest::ClientBuilder::new()
         .user_agent(APP_USER_AGENT)
         .build().unwrap();
 
@@ -75,10 +68,7 @@ async fn main() {
 
         println!("OLD TOML: {}", oldtoml);
 
-        match process_feed(&client, mut_feed).await {
-            Err(err) => { println!("Couldn't process feed. {}", err); }
-            _ => ()
-        }
+        process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
         let newtoml = toml::to_string(&config).unwrap();
         println!("NEW TOML: {}", newtoml);
