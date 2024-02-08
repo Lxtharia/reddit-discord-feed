@@ -1,0 +1,8 @@
+version: "3"
+
+services:
+    reddit-discord-feed:
+        build: .
+        restart: unless-stopped
+        volumes:
+            - ./config.toml:/code/config.toml
