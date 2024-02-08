@@ -55,18 +55,18 @@ async fn main() {
         .user_agent(APP_USER_AGENT)
         .build().unwrap();
 
-    for feed in feeds {
+    for mut feed in feeds {
         // process a feed, once
         println!("==== Processing feed {} =====", &feed.name);
-        let _ = process_feed(&client, &feed.rss_url, &feed.webhook_url, feed.time_last_post_sent).await;
+        let _ = process_feed(&client, &mut feed).await;
     }
 
 }
 
 
-async fn process_feed(client: &reqwest::Client, reddit_url: &str, webhook_url: &str, time_last_post_sent: i64) -> Result<(),reqwest::Error> {
+async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),reqwest::Error> {
     // Download the rss file and convert it to text
-    let body: String = client.get(reddit_url).send()
+    let body: String = client.get(&feed.rss_url).send()
         .await?
         .text()
         .await?;
@@ -77,7 +77,7 @@ async fn process_feed(client: &reqwest::Client, reddit_url: &str, webhook_url: &
     for post in posts.iter().rev() {
 
         // If the post was posted earlier than the last time we checked we shouldve processed it already
-        if post.timestamp <= time_last_post_sent {
+        if post.timestamp <= feed.time_last_post_sent {
             continue;
         }
 
@@ -108,15 +108,16 @@ async fn process_feed(client: &reqwest::Client, reddit_url: &str, webhook_url: &
         println!("----- Processing Post: {:?} -----", data);
 
         // Post json data to the discord webhook url
-        let res = client.post(webhook_url)
+        let res = client.post(&feed.webhook_url)
             .json(&data)
             .send()
             .await?;
 
         if res.status().is_success() {
-            let new_time_last_post_sent = post.timestamp;
-            println!("Timestamp of last post sent{:?}", new_time_last_post_sent);
+            println!("Timestamp of last post sent{:?}", post.timestamp);
+            feed.time_last_post_sent = post.timestamp;
             // TODO: write this to a persistant file, even if the program crashes.
+
         }
 
         // Wait a bit to prevent getting rate limited
