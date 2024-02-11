@@ -29,25 +29,30 @@ struct RedditPost {
     image_url: String,
 }
 
-fn load_config(filepath: &str) -> Result<Config, Box<dyn Error>> {
-    let config: Config = toml::from_str( &fs::read_to_string(filepath)? )?;
-    return Ok(config);
+// Path to config file
+const CONFIGFILE: &str = "config.toml";
 
+fn load_config(filepath: &str) -> Result<Config, toml::de::Error> {
+    let file_content = &fs::read_to_string(filepath).expect(&format!("There should be a configfile named '{}' in the current directory", CONFIGFILE));
+    return toml::from_str(file_content);
 }
 
 fn write_config(filepath: &str, config: &Config) -> Result<(), Box<dyn Error>> {
-    fs::write( filepath, toml::to_string(&config)? )?;
+    let configfile_disclaimer = String::from(
+r"# ====== INFO ======
+# This configfile get's parsed, updated and written back by the program.
+# Therefore, any comments and unused fields will get lost
+
+");
+    fs::write( filepath, configfile_disclaimer + toml::to_string(&config)?.as_str() )?;
     Ok(())
 }
 
 #[tokio::main]
 async fn main() {
 
-    // Path to config file
-    const CONFIGFILE: &str = "config.toml";
-
     // read feed- and webhook-url from config file
-    let mut config = load_config(CONFIGFILE).expect("Error reading config file");
+    let mut config = load_config(CONFIGFILE).unwrap();
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
@@ -66,12 +71,12 @@ async fn main() {
         let mut_feed = &mut config.feeds[i];
         println!("==== Processing feed [[ {} ]] =====", mut_feed.name);
 
-        println!("OLD TOML: {}", oldtoml);
+        println!("OLD CONFIG: {}", oldtoml);
 
         process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
         let newtoml = toml::to_string(&config).unwrap();
-        println!("NEW TOML: {}", newtoml);
+        println!("NEW CONFIG: {}", newtoml);
         write_config(CONFIGFILE, &config).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
     }
 
