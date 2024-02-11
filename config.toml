@@ -1,6 +1,0 @@
-[[feeds]]
-name = "My reddit feed"
-rss_url = "https://www.reddit.com/r/reddit.rss"
-webhook_url = "https://discord.com/api/webhooks/0000000000/xxxxxxxxxxxxxxxxxxxxxxxxx"
-time_last_post_sent = 0
-

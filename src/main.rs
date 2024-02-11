@@ -17,6 +17,12 @@ struct Feed {
     rss_url: String,
     webhook_url: String,
     time_last_post_sent: i64,
+    // Some optional values
+    color: Option<u32>,
+    title: Option<String>,
+    title_url: Option<String>,
+    webhook_user_name: Option<String>,
+    webhook_avatar_url: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -84,6 +90,7 @@ async fn main() {
 
 
 async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),reqwest::Error> {
+    
     // Download the rss file and convert it to text
     let body: String = client.get(&feed.rss_url).send()
         .await?
@@ -92,24 +99,28 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
 
     // parsing
     let mut posts = parse_xml(&body);
+    // Sort by newest
     posts.sort_by_key(|p| p.timestamp);
 
     for post in posts {
-        // If the post was posted earlier than the last time we checked we shouldve processed it already
+        // If the post was posted earlier than the latest post we posted, we assume we processed it already
         if post.timestamp <= feed.time_last_post_sent {
             continue;
         }
 
         // Creating a json body to send to discord
         let data = json!({
-            "username": "Schkreckl",
-            "avatar_url": "https://styles.redditmedia.com/t5_4bnl6/styles/communityIcon_zimq8fp2clp11.png",
+            "username": match &feed.webhook_user_name {
+                Some(s) if s.is_empty() => None,
+                Some(s) => Some(s),
+                None => None },
+            "avatar_url": feed.webhook_avatar_url,
             "embeds": [
             {
-                "color": 19608,
+                "color": feed.color,
                 "author": {
-                    "name": "Neuer Post auf Schkreckl!",
-                    "url": "https://www.reddit.com/r/schkreckl",
+                    "name": feed.title,
+                    "url": feed.rss_url,
                 },
                 "fields": [
                     {
