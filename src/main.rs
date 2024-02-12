@@ -72,17 +72,12 @@ async fn main() {
 
     // Process all the feeds and update the config after each one
     for i in 0..config.feeds.len() {
-        let oldtoml = toml::to_string(&config.clone()).unwrap();
-
         let mut_feed = &mut config.feeds[i];
         println!("==== Processing feed [[ {} ]] =====", mut_feed.name);
 
-        println!("OLD CONFIG: {}", oldtoml);
-
         process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
-        let newtoml = toml::to_string(&config).unwrap();
-        println!("NEW CONFIG: {}", newtoml);
+        println!("Written new Config, updated timestamp: {}", &mut_feed.time_last_post_sent);
         write_config(CONFIGFILE, &config).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
     }
 
@@ -98,7 +93,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         .await?;
 
     // parsing
-    let mut posts = parse_xml(&body);
+    let mut posts = parse_atom_xml(&body);
     // Sort by newest
     posts.sort_by_key(|p| p.timestamp);
 
@@ -158,7 +153,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
 }
 
 
-fn parse_xml(body: &str) -> Vec<RedditPost> {
+fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
     let namespace = "http://www.w3.org/2005/Atom";
     let media_namespace = "http://search.yahoo.com/mrss/";
