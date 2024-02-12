@@ -5,6 +5,7 @@ use serde_json::json;
 use chrono::{DateTime};
 use minidom::Element;
 use reqwest;
+use toml_edit::Document;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Config {
@@ -38,19 +39,17 @@ struct RedditPost {
 // Path to config file
 const CONFIGFILE: &str = "config.toml";
 
-fn load_config(filepath: &str) -> Result<Config, toml::de::Error> {
+fn load_toml(filepath: &str) -> Result<Document, toml_edit::TomlError> {
     let file_content = &fs::read_to_string(filepath).expect(&format!("There should be a configfile named '{}' in the current directory", CONFIGFILE));
-    return toml::from_str(file_content);
+    return file_content.parse::<Document>();
 }
 
-fn write_config(filepath: &str, config: &Config) -> Result<(), Box<dyn Error>> {
-    let configfile_disclaimer = String::from(
-r"# ====== INFO ======
-# This configfile get's parsed, updated and written back by the program.
-# Therefore, any comments and unused fields will get lost
+fn load_feeds_from_doc(doc: &Document) -> () {
 
-");
-    fs::write( filepath, configfile_disclaimer + toml::to_string(&config)?.as_str() )?;
+}
+
+fn save_toml(filepath: &str, doc: &Document) -> Result<(), Box<dyn Error>> {
+    fs::write( filepath, &doc.to_string() )?;
     Ok(())
 }
 
@@ -58,7 +57,8 @@ r"# ====== INFO ======
 async fn main() {
 
     // read feed- and webhook-url from config file
-    let mut config = load_config(CONFIGFILE).unwrap();
+    let doc = load_toml(CONFIGFILE).unwrap(); 
+    let mut config = toml_edit::de::from_document::<Config>(&doc).unwrap();
 
     // Name your user agent after your app?
     static APP_USER_AGENT: &str = concat!(
@@ -78,7 +78,8 @@ async fn main() {
         process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
         println!("Written new Config, updated timestamp: {}", &mut_feed.time_last_post_sent);
-        write_config(CONFIGFILE, &config).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
+        doc["feeds"] = config
+        save_toml(CONFIGFILE, &doc).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
     }
 
 }
@@ -141,8 +142,8 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
 
         if res.status().is_success() {
             // Change the timestamp in the feed object
-            feed.time_last_post_sent = post.timestamp;
         }
+        feed.time_last_post_sent = post.timestamp;
 
         // Wait a bit to prevent getting rate limited
         std::thread::sleep(std::time::Duration::from_millis(2000));
