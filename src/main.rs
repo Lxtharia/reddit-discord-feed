@@ -107,7 +107,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         // Format author string
         let post_author_string = match (&post.author, &post.author_url) {
             (Some(name), Some(url)) => format!("[{}]({})", name, url),
-            (Some(name), None) => name,
+            (Some(name), None) => name.to_string(),
             _ => "[Unknown]".to_string(),
         };
 
