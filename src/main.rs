@@ -3,7 +3,7 @@ use std::error::Error;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use chrono::{DateTime};
-use minidom::Element;
+use minidom::{Element, NSChoice};
 use reqwest;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -70,6 +70,7 @@ async fn main() {
         .user_agent(APP_USER_AGENT)
         .build().unwrap();
 
+    println!("============ RUNNING ============");
     // Process all the feeds and update the config after each one
     for i in 0..config.feeds.len() {
         let mut_feed = &mut config.feeds[i];
@@ -155,9 +156,16 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
 
 fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
-    let namespace = "http://www.w3.org/2005/Atom";
-    let media_namespace = "http://search.yahoo.com/mrss/";
     let root: Element = body.parse().unwrap();
+
+    let mut namespace = NSChoice::Any;
+    let mut media_namespace = NSChoice::Any;
+
+    // Get namespaces
+    if root.has_child("feed", namespace){
+        namespace = root.get_child("feed", NSChoice::Any ).unwrap().attr("xmlns").unwrap_or("http://www.w3.org/2005/Atom").into();
+        media_namespace = root.get_child("feed", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();;
+    }
 
     let mut posts: Vec<RedditPost> = Vec::new();
 
