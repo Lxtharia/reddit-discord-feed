@@ -116,7 +116,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
                 "color": feed.color,
                 "author": {
                     "name": feed.title,
-                    "url": feed.rss_url,
+                    "url": feed.title_url,
                 },
                 "fields": [
                     {
