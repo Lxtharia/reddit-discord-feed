@@ -30,9 +30,9 @@ struct RedditPost {
     timestamp: i64,
     title: String,
     url: String,
-    author: String,
-    author_url: String,
     image_url: String,
+    author: Option<String>,
+    author_url: Option<String>,
 }
 
 // Path to config file
@@ -104,6 +104,13 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
             continue;
         }
 
+        // Format author string
+        let post_author_string = match (&post.author, &post.author_url) {
+            (Some(name), Some(url)) => format!("[{}]({})", name, url),
+            (Some(name), None) => name,
+            _ => "[Unknown]".to_string(),
+        };
+
         // Creating a json body to send to discord
         let data = json!({
             "username": match &feed.webhook_user_name {
@@ -120,8 +127,8 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
                 },
                 "fields": [
                     {
-                        "name": "Autor",
-                        "value": format!("[{}]({})", post.author, post.author_url),
+                        "name": "Author",
+                        "value": post_author_string,
                     },
                 ],
                 "title": post.title,
@@ -131,8 +138,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
             ]
         });
 
-        println!("----- Sending post:\n {:?}", post);
-        println!("-----");
+        println!("----- Sending post:\n\t{:?}\n", post);
 
         // Post json data to the discord webhook url
         let res = client.post(&feed.webhook_url)
@@ -164,7 +170,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
     // Get namespaces
     if root.has_child("feed", namespace){
         namespace = root.get_child("feed", NSChoice::Any ).unwrap().attr("xmlns").unwrap_or("http://www.w3.org/2005/Atom").into();
-        media_namespace = root.get_child("feed", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();;
+        media_namespace = root.get_child("feed", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();
     }
 
     let mut posts: Vec<RedditPost> = Vec::new();
@@ -176,33 +182,36 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
             let mut timestamp = 0;
             let mut title = "[Kein Titel]".to_string();
             let mut url = "".to_string();
-            let mut author = "u/?".to_string();
-            let mut author_url = "".to_string();
             let mut image_url = "".to_string();
+            let mut author = None;
+            let mut author_url = None;
 
             // processing an entry
             for child in trunk.children() {
 
                 if child.is("author", namespace) {
                     match child.get_child("name", namespace){
-                        Some(elem) => author = elem.text(),
+                        Some(elem) => author = Some(elem.text()),
                         None => (),
                     };
                     match child.get_child("uri", namespace) {
-                        Some(elem) => author_url = elem.text(),
+                        Some(elem) => author_url = Some(elem.text()),
                         None => (),
                     };
+
                 } else if child.is("link", namespace) {
                     match child.attr("href"){
                         Some(elem) => url = elem.to_string(),
                         None => (),
                     };
+
                 } else if child.is("published", namespace) {
                     let post_time_string = child.text();
                     timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%z").unwrap().timestamp();
 
                 } else if child.is("title", namespace) {
                     title = child.text();
+
                 } else if child.is("thumbnail", media_namespace) {
                     match child.attr("url") {
                         Some(elem) => image_url = elem.to_string(),
