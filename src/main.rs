@@ -129,6 +129,12 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
                     {
                         "name": "Author",
                         "value": post_author_string,
+                        "inline": true,
+                    },
+                    {
+                        "name": "Time posted",
+                        "value": format!("<t:{0}:D>\n<t:{0}:t>", post.timestamp),
+                        "inline": true,
                     },
                 ],
                 "title": post.title,
