@@ -1,5 +1,6 @@
 use std::fs;
 use std::error::Error;
+use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use chrono::{DateTime};
@@ -23,6 +24,7 @@ struct Feed {
     title_url: Option<String>,
     webhook_user_name: Option<String>,
     webhook_avatar_url: Option<String>,
+    save_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -30,7 +32,7 @@ struct RedditPost {
     timestamp: i64,
     title: String,
     url: String,
-    image_url: String,
+    thumbnail_url: String,
     author: Option<String>,
     author_url: Option<String>,
 }
@@ -139,12 +141,12 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
                 ],
                 "title": post.title,
                 "url": post.url,
-                "image": { "url": post.image_url },
+                "image": { "url": post.thumbnail_url },
             },
             ]
         });
 
-        println!("----- Sending post:\n\t{:?}\n", post);
+        println!("\t----- Sending post:\n\t{:?}", post);
 
         // Post json data to the discord webhook url
         let res = client.post(&feed.webhook_url)
@@ -156,6 +158,18 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
             // Change the timestamp in the feed object
             feed.time_last_post_sent = post.timestamp;
         }
+
+        // if a path to save to is given
+        // TODO: check if file path is a valid and writable directory when loading config
+        // (So no file!)
+        if feed.save_path.is_ok() {
+            let filename: &str = format!("test [{}].png", post.timestamp);
+            print!("\t\tDownloading Image to: {}/{}\n", path,filename); // TODO: Not the real pathname
+            match save_image(path, thumbnail_url, filename){
+                Ok(_) => println!("Success!"),
+                Err(e) => println!("Error! {}", e),
+            };
+        };
 
         // Wait a bit to prevent getting rate limited
         std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -188,7 +202,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
             let mut timestamp = 0;
             let mut title = "[Kein Titel]".to_string();
             let mut url = "".to_string();
-            let mut image_url = "".to_string();
+            let mut thumbnail_url = "".to_string();
             let mut author = None;
             let mut author_url = None;
 
@@ -220,7 +234,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
                 } else if child.is("thumbnail", media_namespace) {
                     match child.attr("url") {
-                        Some(elem) => image_url = elem.to_string(),
+                        Some(elem) => thumbnail_url = elem.to_string(),
                         None => (),
                     }
                 }
@@ -234,7 +248,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
                     url: url,
                     author: author,
                     author_url: author_url,
-                    image_url: image_url,
+                    thumbnail_url: thumbnail_url,
                 });
 
         }
@@ -243,3 +257,19 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
     return posts;
 }
 
+fn save_image(client: &Client, path: &PathBuf, thumbnail_url: &str, filename: &str) -> Result<()> {
+    let img_bytes = client.get(&thumbnail_url).send()
+        .await?
+        .bytes()
+        .await?;
+
+    // Create full path from dir and filename
+    let full_path: PathBuf = path.clone();
+    full_path.set_file_name(filename);
+
+    // write
+    std::fs::write(full_path, img_bytes)?;
+
+    Ok(())
+
+}
