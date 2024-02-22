@@ -3,7 +3,7 @@ use std::error::Error;
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use serde_json::json;
-use chrono::{DateTime};
+use chrono::DateTime;
 use minidom::{Element, NSChoice};
 use reqwest;
 
@@ -243,12 +243,12 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
             // Add new object to list
             posts.push( 
                 RedditPost {
-                    timestamp: timestamp,
-                    title: title,
-                    url: url,
-                    author: author,
-                    author_url: author_url,
-                    thumbnail_url: thumbnail_url,
+                    timestamp,
+                    title,
+                    url,
+                    author,
+                    author_url,
+                    thumbnail_url,
                 });
 
         }
