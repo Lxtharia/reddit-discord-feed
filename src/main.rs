@@ -87,7 +87,7 @@ async fn main() {
 }
 
 
-async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),reqwest::Error> {
+async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
     
     // Download the rss file and convert it to text
     let body: String = client.get(&feed.rss_url).send()
@@ -160,16 +160,16 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(),re
         }
 
         // if a path to save to is given
-        // TODO: check if file path is a valid and writable directory when loading config
-        // (So no file!)
-        if feed.save_path.is_ok() {
-            let filename: &str = format!("test [{}].png", post.timestamp);
-            print!("\t\tDownloading Image to: {}/{}\n", path,filename); // TODO: Not the real pathname
-            match save_image(path, thumbnail_url, filename){
+        // TODO: check if file path is a valid (no file)  when loading config
+        // and writable directory (Will break anyway, if its deleted in between)
+        match &feed.save_path { None => (), Some(dst_path) => {
+            let filename: String = format!("test-[{}].png", post.timestamp);
+            print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
+            match save_image(&client, dst_path, &post.thumbnail_url, &filename).await {
                 Ok(_) => println!("Success!"),
                 Err(e) => println!("Error! {}", e),
             };
-        };
+        } };
 
         // Wait a bit to prevent getting rate limited
         std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -257,17 +257,15 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
     return posts;
 }
 
-fn save_image(client: &Client, path: &PathBuf, thumbnail_url: &str, filename: &str) -> Result<()> {
-    let img_bytes = client.get(&thumbnail_url).send()
+async fn save_image(client: &reqwest::Client, dst_dir: &PathBuf, img_url: &String, filename: &str) -> Result<(), Box<dyn Error>> {
+    let img_bytes = client.get(img_url).send()
         .await?
         .bytes()
         .await?;
 
-    // Create full path from dir and filename
-    let full_path: PathBuf = path.clone();
-    full_path.set_file_name(filename);
-
     // write
+    let mut full_path = dst_dir.clone();
+    full_path.push(filename);
     std::fs::write(full_path, img_bytes)?;
 
     Ok(())
