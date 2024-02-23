@@ -6,6 +6,7 @@ use serde_json::json;
 use chrono::DateTime;
 use minidom::{Element, NSChoice};
 use reqwest;
+use regex::Regex;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Config {
@@ -32,10 +33,12 @@ struct RedditPost {
     timestamp: i64,
     title: String,
     url: String,
-    thumbnail_url: String,
+    thumbnail_url: Option<String>,
+    image_url: Option<String>,
     author: Option<String>,
     author_url: Option<String>,
 }
+
 
 // Path to config file
 const CONFIGFILE: &str = "config.toml";
@@ -76,14 +79,13 @@ async fn main() {
     // Process all the feeds and update the config after each one
     for i in 0..config.feeds.len() {
         let mut_feed = &mut config.feeds[i];
-        println!("==== Processing feed [[ {} ]] =====", mut_feed.name);
+        println!("====>> Processing feed [[ {} ]] == Saving images to: {:?} ", mut_feed.name, mut_feed.save_path);
 
         process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
         println!("Written new Config, updated timestamp: {}", &mut_feed.time_last_post_sent);
         write_config(CONFIGFILE, &config).unwrap_or_else(|err| println!("Couldn't write to config file. {}", err) );
     }
-
 }
 
 
@@ -162,14 +164,19 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         // if a path to save to is given
         // TODO: check if file path is a valid (no file)  when loading config
         // and writable directory (Will break anyway, if its deleted in between)
-        match &feed.save_path { None => (), Some(dst_path) => {
-            let filename: String = format!("test-[{}].png", post.timestamp);
-            print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
-            match save_image(&client, dst_path, &post.thumbnail_url, &filename).await {
-                Ok(_) => println!("Success!"),
-                Err(e) => println!("Error! {}", e),
-            };
-        } };
+        match (&feed.save_path, &post.image_url) {
+            (Some(dst_path), Some(url)) => {
+                let filename: String = format!("test-[{}].png", post.timestamp);
+
+                print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
+                match save_image(&client, dst_path, url, &filename).await {
+                    Ok(_) => println!("Success!"),
+                    Err(e) => println!("Error! {}", e),
+                };
+            },
+            (Some(_), None) => println!("No image url found"),
+            _ => (), 
+        };
 
         // Wait a bit to prevent getting rate limited
         std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -202,7 +209,8 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
             let mut timestamp = 0;
             let mut title = "[Kein Titel]".to_string();
             let mut url = "".to_string();
-            let mut thumbnail_url = "".to_string();
+            let mut thumbnail_url = None;
+            let mut image_url = None;
             let mut author = None;
             let mut author_url = None;
 
@@ -234,14 +242,25 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
                 } else if child.is("thumbnail", media_namespace) {
                     match child.attr("url") {
-                        Some(elem) => thumbnail_url = elem.to_string(),
+                        Some(elem) => thumbnail_url = Some(elem.to_string()),
                         None => (),
+                    }
+                } else if child.is("content", namespace) {
+                    let content = child.text();
+                    // Read only image url from content somehow
+                    let re = Regex::new(r"https://i.redd.it/.+\.(jpg|jpeg|png|webp)").unwrap();
+                    let caps = re.captures(&content);
+                    if caps.is_some() {
+                        image_url = match caps.unwrap().get(0) {
+                            Some(cap_match) => Some(cap_match.as_str().to_string()),
+                            None => None,
+                        }
                     }
                 }
             }
 
             // Add new object to list
-            posts.push( 
+            posts.push(
                 RedditPost {
                     timestamp,
                     title,
@@ -249,6 +268,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
                     author,
                     author_url,
                     thumbnail_url,
+                    image_url,
                 });
 
         }
