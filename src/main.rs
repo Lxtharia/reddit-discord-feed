@@ -166,7 +166,9 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         // and writable directory (Will break anyway, if its deleted in between)
         match (&feed.save_path, &post.image_url) {
             (Some(dst_path), Some(url)) => {
-                let filename: String = Path::new(&url).file_name().expect("Messed up image url").to_str().unwrap().to_string();
+                let original_filestem: String = Path::new(&url).file_stem().unwrap().to_str().unwrap().to_string();
+                let original_extention: String = Path::new(&url).extension().unwrap().to_str().unwrap().to_string();
+                let filename = format!("{} - [{}].{}", &post.title, original_filestem, original_extention); 
 
                 print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
                 match save_image(&client, dst_path, url, &filename).await {
@@ -247,7 +249,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
                     }
                 } else if child.is("content", namespace) {
                     let content = child.text();
-                    // Read only image url from content somehow
+                    // Read image url from content
                     let re = Regex::new(r"https://i.redd.it/.+\.(jpg|jpeg|png|webp)").unwrap();
                     let caps = re.captures(&content);
                     if caps.is_some() {
