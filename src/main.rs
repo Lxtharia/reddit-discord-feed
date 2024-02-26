@@ -171,7 +171,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                 let original_extention: String = Path::new(&url).extension().unwrap().to_str().unwrap().to_string();
                 let filename = format!("{} - [{}].{}", &post.title, &original_filestem, original_extention);
 
-                print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
+                print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), sanitize_filename(&filename)); // TODO: Not the real pathname
                 match save_image(&client, dst_path, url, &filename).await {
                     Ok(_) => println!("Success!"),
                     Err(e) => println!("Error! {}", e),
