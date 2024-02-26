@@ -251,7 +251,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
                 } else if child.is("content", namespace) {
                     let content = child.text();
                     // Read image url from content
-                    let re = Regex::new(r"https://i.redd.it/.+\.(jpg|jpeg|png|webp|gif)").unwrap();
+                    let re = Regex::new(r"https://(i.redd.it|i.imgur.com)/.+\.(jpg|jpeg|png|webp|gif)").unwrap();
                     let caps = re.captures(&content);
                     if caps.is_some() {
                         image_url = match caps.unwrap().get(0) {
