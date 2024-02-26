@@ -90,7 +90,7 @@ async fn main() {
 
 
 async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
-    
+
     // Download the rss file and convert it to text
     let body: String = client.get(&feed.rss_url).send()
         .await?
@@ -135,6 +135,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                         "value": post_author_string,
                         "inline": true,
                     },
+                    // TODO: Make optional
                     {
                         "name": "Time posted",
                         "value": format!("<t:{0}:D>\n<t:{0}:t>", post.timestamp),
@@ -168,7 +169,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
             (Some(dst_path), Some(url)) => {
                 let original_filestem: String = Path::new(&url).file_stem().unwrap().to_str().unwrap().to_string();
                 let original_extention: String = Path::new(&url).extension().unwrap().to_str().unwrap().to_string();
-                let filename = format!("{} - [{}].{}", &post.title, original_filestem, original_extention); 
+                let filename = format!("{} - [{}].{}", &post.title, &original_filestem, original_extention);
 
                 print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), filename); // TODO: Not the real pathname
                 match save_image(&client, dst_path, url, &filename).await {
@@ -177,7 +178,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                 };
             },
             (Some(_), None) => println!("No image url found"),
-            _ => (), 
+            _ => (),
         };
 
         // Wait a bit to prevent getting rate limited
@@ -250,7 +251,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
                 } else if child.is("content", namespace) {
                     let content = child.text();
                     // Read image url from content
-                    let re = Regex::new(r"https://i.redd.it/.+\.(jpg|jpeg|png|webp)").unwrap();
+                    let re = Regex::new(r"https://i.redd.it/.+\.(jpg|jpeg|png|webp|gif)").unwrap();
                     let caps = re.captures(&content);
                     if caps.is_some() {
                         image_url = match caps.unwrap().get(0) {
@@ -287,9 +288,25 @@ async fn save_image(client: &reqwest::Client, dst_dir: &PathBuf, img_url: &Strin
 
     // write
     let mut full_path = dst_dir.clone();
-    full_path.push(filename);
+    full_path.push(sanitize_filename(&filename));
     std::fs::write(full_path, img_bytes)?;
 
     Ok(())
 
 }
+
+fn sanitize_filename(filename: &str) -> String {
+    let illegal_chars: Vec<char> = vec!['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+
+    let result: String = filename
+        .chars()
+        .map(|c|
+             if c == '"' { '\'' }
+             else if illegal_chars.contains(&c) { '_' }
+             else { c }
+           )
+        .collect();
+
+    result
+}
+
