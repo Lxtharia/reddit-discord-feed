@@ -116,9 +116,9 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         };
 
         // Choose existing image/thumbnail url
-        let embed_img_url: String = match (&post.thumbnail_url, &post.image_url) {
-            (None, Some(iu) ) => iu.to_string(),
-            (Some(tu), None) => tu.to_string(),
+        let embed_img_url: String = match (&post.image_url, &post.thumbnail_url) {
+            (None, Some(tu) ) => tu.to_string(),
+            (Some(iu), _ ) => iu.to_string(),
             _ => String::from(""),
         };
 
