@@ -115,6 +115,13 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
             _ => "[Unknown]".to_string(),
         };
 
+        // Choose existing image/thumbnail url
+        let embed_img_url: String = match (&post.thumbnail_url, &post.image_url) {
+            (None, Some(iu) ) => iu.to_string(),
+            (Some(tu), None) => tu.to_string(),
+            _ => String::from(""),
+        };
+
         // Creating a json body to send to discord
         let data = json!({
             "username": match &feed.webhook_user_name {
@@ -144,7 +151,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                 ],
                 "title": post.title,
                 "url": post.url,
-                "image": { "url": post.thumbnail_url },
+                "image": { "url": embed_img_url },
             },
             ]
         });
