@@ -172,8 +172,9 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         // if a path to save to is given
         // TODO: check if file path is a valid (no file)  when loading config
         // and writable directory (Will break anyway, if its deleted in between)
-        match (&feed.save_path, &post.image_url) {
-            (Some(dst_path), Some(url)) => {
+        match (&feed.save_path, &post.image_url, &post.thumbnail_url) {
+            (Some(dst_path), Some(url), _ ) |
+            (Some(dst_path), None, Some(url) ) => {
                 let original_filestem: String = Path::new(&url).file_stem().unwrap().to_str().unwrap().to_string();
                 let original_extention: String = Path::new(&url).extension().unwrap().to_str().unwrap().to_string();
                 let filename = format!("{} - [{}].{}", &post.title, &original_filestem, original_extention);
@@ -192,7 +193,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                     Err(e) => println!("Error! {}", e),
                 };
             },
-            (Some(_), None) => println!("No image url found"),
+            (Some(_), None, None) => println!("No image url found"),
             _ => (),
         };
 
