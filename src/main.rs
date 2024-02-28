@@ -179,6 +179,14 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
                 let filename = format!("{} - [{}].{}", &post.title, &original_filestem, original_extention);
 
                 print!("\t\t----- Downloading Image to: {}/{}\n\t\t\t=> ", dst_path.display(), sanitize_filename(&filename)); // TODO: Not the real pathname
+
+                // Try to create missing directory
+                match std::fs::create_dir_all(dst_path) {
+                    Err(e) => println!("Could not create missing directory! {}", e),
+                    _ => (),
+                }
+
+                // Save image
                 match save_image(&client, dst_path, url, &filename).await {
                     Ok(_) => println!("Success!"),
                     Err(e) => println!("Error! {}", e),
