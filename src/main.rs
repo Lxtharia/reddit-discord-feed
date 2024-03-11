@@ -17,7 +17,7 @@ struct Config {
 struct Feed {
     name: String,
     rss_url: String,
-    webhook_url: String,
+    webhook_url: Option<String>,
     time_last_post_sent: i64,
     // Some optional values
     color: Option<u32>,
@@ -91,6 +91,12 @@ async fn main() {
 
 async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), Box<dyn Error>> {
 
+    // Skipping processing feed when we neither save nor post anything
+    if feed.webhook_url.is_none() && feed.save_path.is_none() {
+        println!("[WARNING] Neither webhook url nor path to save posts to is set. Skipping processing...");
+        return Ok(());
+    }
+
     // Download the rss file and convert it to text
     let body: String = client.get(&feed.rss_url).send()
         .await?
@@ -159,15 +165,23 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         println!("\t----- Sending post:\n\t{:?}", post);
 
         // Post json data to the discord webhook url
-        let res = client.post(&feed.webhook_url)
-            .json(&data)
-            .send()
-            .await?; // This exits the function on error (for example if the url is invalid)
-
-        if res.status().is_success() {
-            // Change the timestamp in the feed object
-            feed.time_last_post_sent = post.timestamp;
+        match &feed.webhook_url {
+            Some(url) => {
+                let res = client.post(url)
+                    .json(&data)
+                    .send()
+                    .await?; // This exits the function on error (for example if the url is invalid)
+                if res.status().is_success() {
+                    // Change the timestamp in the feed object
+                    feed.time_last_post_sent = post.timestamp;
+                }
+            },
+            None => {
+                // Update timestamp anyway, to only save each image once
+                feed.time_last_post_sent = post.timestamp;
+            }
         }
+
 
         // if a path to save to is given
         // TODO: check if file path is a valid (no file)  when loading config
