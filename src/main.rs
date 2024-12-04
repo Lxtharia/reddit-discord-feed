@@ -224,7 +224,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
 }
 
 fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
-    let username_regex: Regex = Regex::new(r".*/(?<username>\w+)$").unwrap();
+    let username_regex: Regex = Regex::new(r".*/(\w+)$").unwrap();
 
     let mut posts: Vec<RedditPost> = Vec::new();
     let doc = Document::parse(body).unwrap();
@@ -237,7 +237,7 @@ fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
     let mut namespace = "";
 
     // Get namespaces
-    for ns in channel_node.namespaces() {
+    for ns in rss_node.namespaces() {
         println!("NAMESPACE: {} and {:?}", ns.uri(), ns.name());
         match ns.name() {
             Some("media") => media_namespace = ns.uri(),
@@ -275,7 +275,7 @@ fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
                     if let Some(s) = child.text() {
                         author_url = Some(s.to_string());
                         if let Some(cs) = username_regex.captures(s) {
-                            author = cs.name("name").and_then(|m| Some(m.as_str().to_string()));
+                            author = cs.get(1).and_then(|m| Some(m.as_str().to_string()));
                         }
                     }
 
