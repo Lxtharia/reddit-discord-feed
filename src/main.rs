@@ -4,9 +4,10 @@ use std::path::{Path, PathBuf};
 use serde::{Serialize, Deserialize};
 use serde_json::json;
 use chrono::DateTime;
-use minidom::{Element, NSChoice};
+use roxmltree::{self, Document, Node, NodeType};
 use reqwest;
 use regex::Regex;
+use std::option::Option;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct Config {
@@ -103,10 +104,13 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         .text()
         .await?;
 
+    fs::write("/tmp/feed.rss", &body);
+
     // parsing
     let mut posts = parse_mrss_xml(&body);
     // Sort by newest
     posts.sort_by_key(|p| p.timestamp);
+    println!("Fetched a list of {} posts.", posts.len());
 
     for post in posts {
         // If the post was posted earlier than the latest post we posted, we assume we processed it already
@@ -223,20 +227,32 @@ fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
     let username_regex: Regex = Regex::new(r".*/(?<username>\w+)$").unwrap();
 
     let mut posts: Vec<RedditPost> = Vec::new();
-    let root: Element = body.parse().unwrap();
+    let doc = Document::parse(body).unwrap();
+    let root = doc.root();
+    let rss_node: Node = find_child_node_with_tag(&root, "rss").unwrap();
+    let channel_node: Node = find_child_node_with_tag(&rss_node, "channel").unwrap();
 
-    let namespace = NSChoice::Any;
-    let mut dc_namespace = NSChoice::Any;
-    let mut media_namespace = NSChoice::Any;
+    let mut media_namespace = "";
+    let mut dc_namespace = "";
+    let mut namespace = "";
 
     // Get namespaces
-    if root.has_child("rss", namespace) {
-        dc_namespace = root.get_child("rss", NSChoice::Any ).unwrap().attr("xmlns:dc").unwrap_or("http://purl.org/dc/elements/1.1/").into();
-        media_namespace = root.get_child("rss", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();
+    for ns in channel_node.namespaces() {
+        println!("NAMESPACE: {} and {:?}", ns.uri(), ns.name());
+        match ns.name() {
+            Some("media") => media_namespace = ns.uri(),
+            Some("dc") => dc_namespace = ns.uri(),
+            None => namespace = ns.uri(),
+            _ => (),
+        }
     }
 
-    for trunk in root.children() {
-        if trunk.is("item", namespace) {
+    for trunk in channel_node.children() {
+        println!("== Trunk item: {:?}", trunk);
+        if trunk.node_type() != NodeType::Element {
+            continue;
+        }
+        if trunk.has_tag_name("item") {
 
             // Defaults
             let mut timestamp = 0;
@@ -245,31 +261,42 @@ fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
             let mut image_url = None;
             let mut author = None;
             let mut author_url = None;
-            let thumbnail_url = None;
+            let mut thumbnail_url = None;
 
             // processing an entry
             for child in trunk.children() {
+                // Saving myself some code and namespace stuff
+                let child_has_tag_name = |s: &str| {
+                    child.has_tag_name(s)
+                };
+                println!("\tChild! {} {:?}", namespace, child);
 
-                if child.is("creator", dc_namespace) {
-                    author_url = Some(child.text());
-                    if let Some(cs) = username_regex.captures(&child.text()) {
-                        author = cs.name("name").and_then(|m| Some(m.as_str().to_string()));
+                if child.has_tag_name((dc_namespace,"creator")) {
+                    if let Some(s) = child.text() {
+                        author_url = Some(s.to_string());
+                        if let Some(cs) = username_regex.captures(s) {
+                            author = cs.name("name").and_then(|m| Some(m.as_str().to_string()));
+                        }
                     }
 
-                } else if child.is("link", namespace) {
-                    url = child.text().to_string();
+                } else if child_has_tag_name("link") {
+                    if let Some(s) = child.text() {
+                        url = s.to_string();
+                    }
 
-                } else if child.is("pubDate", namespace) {
-                    let post_time_string = child.text();
-                    timestamp = DateTime::parse_from_str(&post_time_string, "%a, %d %b %Y %H:%M:%S %z").unwrap().timestamp();
+                } else if child_has_tag_name("pubDate") {
+                    if let Some(post_time_string) = child.text() {
+                        timestamp = DateTime::parse_from_str(&post_time_string, "%a, %d %b %Y %H:%M:%S %z").unwrap().timestamp();
+                    }
 
-                } else if child.is("title", namespace) {
-                    title = child.text();
+                } else if child_has_tag_name("title") {
+                    if let Some(s) = child.text() {
+                        title = s.to_string();
+                    }
 
-                } else if child.is("content", media_namespace) {
-                    match child.attr("url") {
-                        Some(elem) => image_url = Some(elem.to_string()),
-                        None => (),
+                } else if child.has_tag_name((media_namespace, "content")) {
+                    if let Some(s) = child.attribute("url") {
+                        image_url = Some(s.to_string());
                     }
                 }
             }
@@ -295,19 +322,29 @@ fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
 fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
     let mut posts: Vec<RedditPost> = Vec::new();
-    let root: Element = body.parse().unwrap();
+    let doc = Document::parse(body).unwrap();
+    let root = doc.root();
+    let feed_node: Node = find_child_node_with_tag(&root, "feed").unwrap();
 
-    let mut namespace = NSChoice::Any;
-    let mut media_namespace = NSChoice::Any;
+    let mut media_namespace = "";
+    let mut namespace = "";
 
     // Get namespaces
-    if root.has_child("feed", namespace){
-        namespace = root.get_child("feed", NSChoice::Any ).unwrap().attr("xmlns").unwrap_or("http://www.w3.org/2005/Atom").into();
-        media_namespace = root.get_child("feed", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();
+    for ns in feed_node.namespaces() {
+        println!("NAMESPACE: {} and {:?}", ns.uri(), ns.name());
+        match ns.name() {
+            Some("media") => media_namespace = ns.uri(),
+            None => namespace = ns.uri(),
+            _ => (),
+        }
     }
 
-    for trunk in root.children() {
-        if trunk.is("entry", namespace) {
+    for trunk in feed_node.children() {
+        println!("== Trunk item: {:?}", trunk);
+        if trunk.node_type() != NodeType::Element {
+            continue;
+        }
+        if trunk.has_tag_name("entry") {
 
             // Defaults
             let mut timestamp = 0;
@@ -320,44 +357,51 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
             // processing an entry
             for child in trunk.children() {
+                // Saving myself some code and namespace stuff
+                let child_has_tag_name = |s: &str| {
+                    child.has_tag_name((namespace, s))
+                };
+                //println!("\tChild! {} {:?}", namespace, child);
 
-                if child.is("author", namespace) {
-                    match child.get_child("name", namespace){
-                        Some(elem) => author = Some(elem.text()),
-                        None => (),
-                    };
-                    match child.get_child("uri", namespace) {
-                        Some(elem) => author_url = Some(elem.text()),
-                        None => (),
-                    };
+                if child_has_tag_name("author") {
+                    if let Some(elem) = find_child_node_with_tag(&child, "name") {
+                            author = elem.text().and_then(|s| Some(s.to_string()));
+                    }
+                    if let Some(elem) = find_child_node_with_tag(&child, "uri") {
+                            author_url = elem.text().and_then(|s| Some(s.to_string()));
+                    }
 
-                } else if child.is("link", namespace) {
-                    match child.attr("href"){
+                } else if child.has_tag_name("link") {
+                    match child.attribute("href"){
                         Some(elem) => url = elem.to_string(),
                         None => (),
                     };
 
-                } else if child.is("published", namespace) {
-                    let post_time_string = child.text();
-                    timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%:z").unwrap().timestamp();
+                } else if child_has_tag_name("published") {
+                    if let Some(post_time_string) = child.text() {
+                        timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%:z").unwrap().timestamp();
+                    }
 
-                } else if child.is("title", namespace) {
-                    title = child.text();
+                } else if child_has_tag_name("title") {
+                    if let Some(s) = child.text() {
+                        title = s.to_string();
+                    }
 
-                } else if child.is("thumbnail", media_namespace) {
-                    match child.attr("url") {
+                } else if child.has_tag_name((media_namespace, "thumbnail")) {
+                    match child.attribute("url") {
                         Some(elem) => thumbnail_url = Some(elem.to_string()),
                         None => (),
                     }
-                } else if child.is("content", namespace) {
-                    let content = child.text();
-                    // Read image url from content
-                    let re = Regex::new(r"https://(i.redd.it|i.imgur.com)/.+\.(jpg|jpeg|png|webp|gif)").unwrap();
-                    let caps = re.captures(&content);
-                    if caps.is_some() {
-                        image_url = match caps.unwrap().get(0) {
-                            Some(cap_match) => Some(cap_match.as_str().to_string()),
-                            None => None,
+                } else if child_has_tag_name("content") {
+                    if let Some(content) = child.text() {
+                        // Read image url from content
+                        let re = Regex::new(r"https://(i.redd.it|i.imgur.com)/.+\.(jpg|jpeg|png|webp|gif)").unwrap();
+                        let caps = re.captures(&content);
+                        if caps.is_some() {
+                            image_url = match caps.unwrap().get(0) {
+                                Some(cap_match) => Some(cap_match.as_str().to_string()),
+                                None => None,
+                            }
                         }
                     }
                 }
@@ -409,5 +453,9 @@ fn sanitize_filename(filename: &str) -> String {
         .collect();
 
     result
+}
+
+fn find_child_node_with_tag<'a>(n: &Node<'a, 'a>, tag: &str) -> Option<Node<'a, 'a>> {
+    n.children().find(|c| c.has_tag_name(tag))
 }
 
