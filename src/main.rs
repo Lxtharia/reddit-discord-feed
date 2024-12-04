@@ -104,7 +104,7 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         .await?;
 
     // parsing
-    let mut posts = parse_atom_xml(&body);
+    let mut posts = parse_mrss_xml(&body);
     // Sort by newest
     posts.sort_by_key(|p| p.timestamp);
 
@@ -219,9 +219,82 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
     Ok(())
 }
 
+fn parse_mrss_xml(body: &str) -> Vec<RedditPost> {
+    let username_regex: Regex = Regex::new(r".*/(?<username>\w+)$").unwrap();
+
+    let mut posts: Vec<RedditPost> = Vec::new();
+    let root: Element = body.parse().unwrap();
+
+    let namespace = NSChoice::Any;
+    let mut dc_namespace = NSChoice::Any;
+    let mut media_namespace = NSChoice::Any;
+
+    // Get namespaces
+    if root.has_child("rss", namespace) {
+        dc_namespace = root.get_child("rss", NSChoice::Any ).unwrap().attr("xmlns:dc").unwrap_or("http://purl.org/dc/elements/1.1/").into();
+        media_namespace = root.get_child("rss", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();
+    }
+
+    for trunk in root.children() {
+        if trunk.is("item", namespace) {
+
+            // Defaults
+            let mut timestamp = 0;
+            let mut title = "[Kein Titel]".to_string();
+            let mut url = "".to_string();
+            let mut image_url = None;
+            let mut author = None;
+            let mut author_url = None;
+            let thumbnail_url = None;
+
+            // processing an entry
+            for child in trunk.children() {
+
+                if child.is("creator", dc_namespace) {
+                    author_url = Some(child.text());
+                    if let Some(cs) = username_regex.captures(&child.text()) {
+                        author = cs.name("name").and_then(|m| Some(m.as_str().to_string()));
+                    }
+
+                } else if child.is("link", namespace) {
+                    url = child.text().to_string();
+
+                } else if child.is("pubDate", namespace) {
+                    let post_time_string = child.text();
+                    timestamp = DateTime::parse_from_str(&post_time_string, "%a, %d %b %Y %H:%M:%S %z").unwrap().timestamp();
+
+                } else if child.is("title", namespace) {
+                    title = child.text();
+
+                } else if child.is("content", media_namespace) {
+                    match child.attr("url") {
+                        Some(elem) => image_url = Some(elem.to_string()),
+                        None => (),
+                    }
+                }
+            }
+
+            // Add new object to list
+            posts.push(
+                RedditPost {
+                    timestamp,
+                    title,
+                    url,
+                    author,
+                    author_url,
+                    thumbnail_url,
+                    image_url,
+                });
+
+        }
+    }
+
+    return posts;
+}
 
 fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
+    let mut posts: Vec<RedditPost> = Vec::new();
     let root: Element = body.parse().unwrap();
 
     let mut namespace = NSChoice::Any;
@@ -232,8 +305,6 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
         namespace = root.get_child("feed", NSChoice::Any ).unwrap().attr("xmlns").unwrap_or("http://www.w3.org/2005/Atom").into();
         media_namespace = root.get_child("feed", NSChoice::Any).unwrap().attr("xmlns:media").unwrap_or("http://search.yahoo.com/mrss/").into();
     }
-
-    let mut posts: Vec<RedditPost> = Vec::new();
 
     for trunk in root.children() {
         if trunk.is("entry", namespace) {
@@ -268,7 +339,7 @@ fn parse_atom_xml(body: &str) -> Vec<RedditPost> {
 
                 } else if child.is("published", namespace) {
                     let post_time_string = child.text();
-                    timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%z").unwrap().timestamp();
+                    timestamp = DateTime::parse_from_str(&post_time_string, "%Y-%m-%dT%H:%M:%S%:z").unwrap().timestamp();
 
                 } else if child.is("title", namespace) {
                     title = child.text();
