@@ -15,6 +15,12 @@ struct Config {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
+enum FeedType {
+    Reddit,
+    Feddit,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
 struct Feed {
     name: String,
     rss_url: String,
@@ -27,6 +33,7 @@ struct Feed {
     webhook_user_name: Option<String>,
     webhook_avatar_url: Option<String>,
     save_path: Option<PathBuf>,
+    feed_type: FeedType,
 }
 
 #[derive(Clone, Debug)]
@@ -80,7 +87,7 @@ async fn main() {
     // Process all the feeds and update the config after each one
     for i in 0..config.feeds.len() {
         let mut_feed = &mut config.feeds[i];
-        println!("====>> Processing feed [[ {} ]] == Saving images to: {:?} ", mut_feed.name, mut_feed.save_path);
+        println!("====>> Processing feed '{}' [{:?}] (Saving images to: '{:?}') <<====", mut_feed.name, mut_feed.feed_type, mut_feed.save_path);
 
         process_feed(&http_client, mut_feed).await.unwrap_or_else(|err| println!("Couldn't process feed. {}", err) );
 
@@ -104,10 +111,14 @@ async fn process_feed(client: &reqwest::Client, feed: &mut Feed) -> Result<(), B
         .text()
         .await?;
 
-    fs::write("/tmp/feed.rss", &body);
+    //fs::write("/tmp/feed.rss", &body);
 
     // parsing
-    let mut posts = parse_mrss_xml(&body);
+    let mut posts = match feed.feed_type {
+        FeedType::Reddit => parse_atom_xml(&body),
+        FeedType::Feddit => parse_mrss_xml(&body),
+    };
+
     // Sort by newest
     posts.sort_by_key(|p| p.timestamp);
     println!("Fetched a list of {} posts.", posts.len());

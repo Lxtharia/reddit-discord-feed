@@ -6,12 +6,14 @@
 
 [[feeds]]
 name = "My Reddit Feed"
-rss_url = "https://www.reddit.com/r/REDDIT.rss"
+feed_type="Reddit"
+rss_url = "https://www.reddit.com/r/SUBREDDIT.rss"
 webhook_url = "https://discord.com/api/webhooks/1234567890123456/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 time_last_post_sent = 0
 # Optional parameters
 color = 19608  # Color in Decimal format
 title = "New post on the subreddit!" # The thing that stands above every title in all the webhooks
-title_url = "https://www.reddit.com/r/REDDIT"
+title_url = "https://www.reddit.com/r/SUBREDDIT"
 webhook_user_name = "The Bringer of Posts"
 webhook_avatar_url = "https://upload.wikimedia.org/wikipedia/en/thumb/b/bd/Reddit_Logo_Icon.svg/480px-Reddit_Logo_Icon.svg.png"
+save_path = "./images/Reddit/Sub/"
