@@ -45,13 +45,9 @@ jobs:
     #   run: cargo test --profile ${{ matrix.BUILD_TARGET }}
     - name: Rename Binary with Version
       run: mv target/${{ matrix.BUILD_TARGET }}/reddit-discord-feed target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
-        
-    - name: Upload artifact to Release
-      uses: softprops/action-gh-release@v2.2.1
+    - name: Update release artifact
+      uses: johnwbyrd/update-release@v1
       with:
-        name: feed-${{ env.TAG_NAME }}
+        tag: ${{ env.TAG_NAME }}
+        token: ${{ secrets.GITHUB_TOKEN }}
         files: target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
-        tag_name: ${{ env.TAG_NAME }}  # Use the tag from the release event
-        overwrite: true  # Replace existing files if needed
-
-        
