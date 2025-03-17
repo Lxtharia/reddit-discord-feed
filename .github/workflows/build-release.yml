@@ -58,6 +58,7 @@ jobs:
     # - name: Run tests
     #   run: cargo test --profile ${{ matrix.BUILD_TARGET }}
     - name: Rename Binary with Version
+      shell: bash
       run: |
         if [[ "$RUNNER_OS" == "Windows" ]] ; then EXT=".exe"; fi
         mv   target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT  ${{ matrix.bin_name }}-${{ env.TAG_NAME }}$EXT
