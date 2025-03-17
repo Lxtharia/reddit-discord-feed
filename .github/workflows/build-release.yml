@@ -29,13 +29,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bin_name: pixelsortery-linux
+            bin_name: feed-linux
           - os: macos-latest
             target: x86_64-apple-darwin
-            bin_name: pixelsortery-darwin
+            bin_name: feed-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_name: pixelsortery-windows
+            bin_name: feed-windows
     runs-on: ${{ matrix.os }}
     name: Build for ${{ matrix.os }}
     
@@ -61,12 +61,15 @@ jobs:
       shell: bash
       run: |
         if [[ "$RUNNER_OS" == "Windows" ]] ; then EXT=".exe"; fi
-        mv   target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT  ${{ matrix.bin_name }}-${{ env.TAG_NAME }}$EXT
+        src=target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT
+        dst=${{ matrix.bin_name }}-${{ env.TAG_NAME }}$EXT
+        mv  "$src" "$dst"
+        echo "BIN_NAME=$dst" >> $GITHUB_ENV
           
-    - name: Release
+    - name: Upload Artifacts to Release
       uses: softprops/action-gh-release@v2
       # if: startsWith(github.ref, 'refs/tags/')
       with:
         tag_name: ${{ env.TAG_NAME }}
-        files:  feed-${{ env.TAG_NAME }}
+        files:  ${{ env.BIN_NAME }}
         
