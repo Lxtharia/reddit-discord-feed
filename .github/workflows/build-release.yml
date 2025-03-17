@@ -65,8 +65,8 @@ jobs:
       run: |
           rustup update stable
           rustup target add x86_64-apple-darwin
-          rustup default stable
-          rustup override set stable --target x86_64-apple-darwin  # Set default target for the job
+          rustup default x86_64-apple-darwin
+      # rustup override set stable --target x86_64-apple-darwin  # Set default target for the job
     
     - name: Build Binaries in mode "${{ matrix.cargo_target }}" for os "${{ matrix.os }}"
       run: cargo build --profile ${{ matrix.cargo_target }} # --target ${{ matrix.target}}
