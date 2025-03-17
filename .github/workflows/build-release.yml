@@ -29,13 +29,13 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            bin_name: pixelsortery-linux-${{ env.TAG_NAME }}
+            bin_name: pixelsortery-linux
           - os: macos-latest
             target: x86_64-apple-darwin
-            bin_name: pixelsortery-darwin-${{ env.TAG_NAME }}
+            bin_name: pixelsortery-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            bin_name: pixelsortery-windows-${{ env.TAG_NAME }}.exe
+            bin_name: pixelsortery-windows
     runs-on: ${{ matrix.os }}
     
     steps:
@@ -59,7 +59,7 @@ jobs:
     - name: Rename Binary with Version
       run: |
         if [[ "$RUNNER_OS" == "Windows" ]] ; then EXT=".exe"; fi
-        mv   target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT  ${{ matrix.bin_name }}
+        mv   target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT  ${{ matrix.bin_name }}-${{ env.TAG_NAME }}$EXT
           
     - name: Release
       uses: softprops/action-gh-release@v2
