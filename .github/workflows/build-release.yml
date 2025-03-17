@@ -3,6 +3,11 @@ name: Build Release
 on:
   release:
     types: [published]
+  workflow_dispatch:  
+    inputs:
+      tag_name:
+        description: "Tag name of the release"
+        required: true
 # push:
 #   branches:
 #     - main
@@ -10,6 +15,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  TAG_NAME: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
 
 jobs:
   build-linux:
@@ -38,14 +44,14 @@ jobs:
     # - name: Run tests
     #   run: cargo test --profile ${{ matrix.BUILD_TARGET }}
     - name: Rename Binary with Version
-      run: mv target/${{ matrix.BUILD_TARGET }}/reddit-discord-feed target/${{ matrix.BUILD_TARGET }}/feed-${{ github.event.release.tag_name }}
+      run: mv target/${{ matrix.BUILD_TARGET }}/reddit-discord-feed target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
         
     - name: Upload artifact to Release
       uses: softprops/action-gh-release@v2.2.1
       with:
-        name: feed-${{github.event.release.tag_name}}
-        files: target/${{ matrix.BUILD_TARGET }}/feed-${{ github.event.release.tag_name }}
-        tag_name: ${{ github.event.release.tag_name }}  # Use the tag from the release event
+        name: feed-${{ env.TAG_NAME }}
+        files: target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
+        tag_name: ${{ env.TAG_NAME }}  # Use the tag from the release event
         overwrite: true  # Replace existing files if needed
 
         
