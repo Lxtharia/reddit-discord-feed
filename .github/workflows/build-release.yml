@@ -20,13 +20,24 @@ env:
 jobs:
   build-linux:
 
-    runs-on: ubuntu-latest
     permissions:
       contents: write  
     strategy:
       matrix:
-        BUILD_TARGET: [release]
-        
+        cargo_target: [release]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin_name: pixelsortery-linux-${{ env.TAG_NAME }}
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bin_name: pixelsortery-darwin-${{ env.TAG_NAME }}
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin_name: pixelsortery-windows-${{ env.TAG_NAME }}.exe
+    runs-on: ${{ matrix.os }}
+    
     steps:
     - uses: actions/checkout@v4
     - name: Show Rustup Info
@@ -41,34 +52,19 @@ jobs:
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         
-    - name: Build Binaries in mode "${{ matrix.BUILD_TARGET }}"
-      run: cargo build --profile ${{ matrix.BUILD_TARGET }}
+    - name: Build Binaries in mode "${{ matrix.cargo_target }}" for os "${{ matrix.os }}"
+      run: cargo build --profile ${{ matrix.cargo_target }} # --target ${{ matrix.target}}
     # - name: Run tests
     #   run: cargo test --profile ${{ matrix.BUILD_TARGET }}
     - name: Rename Binary with Version
-      run: mv target/${{ matrix.BUILD_TARGET }}/reddit-discord-feed target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
+      run: |
+        if [[ "$RUNNER_OS" == "Windows" ]] ; then EXT=".exe"; fi
+        mv   target/${{ matrix.cargo_target }}/reddit-discord-feed$EXT  ${{ matrix.bin_name }}
+          
     - name: Release
       uses: softprops/action-gh-release@v2
       # if: startsWith(github.ref, 'refs/tags/')
       with:
         tag_name: ${{ env.TAG_NAME }}
-        files:  target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
+        files:  feed-${{ env.TAG_NAME }}
         
-    # - name: release  
-    #   uses: actions/create-release@v1
-    #   id: create_release
-    #   with:
-    #     draft: true
-    #     prerelease: false
-    #     release_name: ${{ env.TAG_NAME }}
-    #     tag_name: ${{ env.TAG_NAME }}
-    #     body_path: CHANGELOG.md
-    #   env:
-    #     GITHUB_TOKEN: ${{ github.token }}
-          
-    # - name: Update release artifact
-    #   uses: johnwbyrd/update-release@v1
-    #   with:
-    #     tag: ${{ env.TAG_NAME }}
-    #     token: ${{ secrets.GITHUB_TOKEN }}
-    #     files: target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
