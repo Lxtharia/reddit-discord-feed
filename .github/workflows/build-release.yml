@@ -63,7 +63,7 @@ jobs:
     - name: Install Rust and Add x86_64 Target
       run: |
           rustup update stable
-          rustup default stable-x86_64-apple-darwin
+          rustup default stable-${{ matrix.target }}
     
     - name: Build Binaries in mode "${{ matrix.cargo_target }}" for os "${{ matrix.os }}"
       run: cargo build --profile ${{ matrix.cargo_target }} # --target ${{ matrix.target}}
