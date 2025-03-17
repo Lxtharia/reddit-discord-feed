@@ -32,6 +32,9 @@ jobs:
             bin_name: feed-linux
           - os: macos-latest
             target: x86_64-apple-darwin
+            bin_name: feed-darwin-x86
+          - os: macos-latest
+            target: aarch64-apple-darwin
             bin_name: feed-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
@@ -54,7 +57,15 @@ jobs:
           ~/.cargo/git
           target
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        
+    
+    - name: Install Rust and Add x86_64 Target
+      if: matrix.target == 'x86_64-apple-darwin'
+      run: |
+          rustup update stable
+          rustup target add x86_64-apple-darwin
+          rustup default stable
+          rustup override set stable --target x86_64-apple-darwin  # Set default target for the job
+    
     - name: Build Binaries in mode "${{ matrix.cargo_target }}" for os "${{ matrix.os }}"
       run: cargo build --profile ${{ matrix.cargo_target }} # --target ${{ matrix.target}}
     # - name: Run tests
