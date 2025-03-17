@@ -24,20 +24,23 @@ jobs:
       contents: write  
     strategy:
       matrix:
-        cargo_target: [release]
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             bin_name: feed-linux
+            cargo_target: release
           - os: macos-latest
             target: x86_64-apple-darwin
             bin_name: feed-darwin-x86
+            cargo_target: release
           - os: macos-latest
             target: aarch64-apple-darwin
             bin_name: feed-darwin
+            cargo_target: release
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             bin_name: feed-windows
+            cargo_target: release
     runs-on: ${{ matrix.os }}
     name: Build for ${{ matrix.os }}
     
