@@ -61,7 +61,6 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     
     - name: Install Rust and Add x86_64 Target
-      if: matrix.target == 'x86_64-apple-darwin'
       run: |
           rustup update stable
           rustup default stable-x86_64-apple-darwin
