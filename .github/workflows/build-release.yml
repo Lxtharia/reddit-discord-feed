@@ -18,7 +18,7 @@ env:
   TAG_NAME: ${{ github.event.release.tag_name || github.event.inputs.tag_name }}
 
 jobs:
-  build-linux:
+  build:
 
     permissions:
       contents: write  
@@ -37,6 +37,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             bin_name: pixelsortery-windows
     runs-on: ${{ matrix.os }}
+    name: Build for ${{ matrix.os }}
     
     steps:
     - uses: actions/checkout@v4
