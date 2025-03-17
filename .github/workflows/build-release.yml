@@ -21,6 +21,8 @@ jobs:
   build-linux:
 
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  
     strategy:
       matrix:
         BUILD_TARGET: [release]
@@ -45,9 +47,28 @@ jobs:
     #   run: cargo test --profile ${{ matrix.BUILD_TARGET }}
     - name: Rename Binary with Version
       run: mv target/${{ matrix.BUILD_TARGET }}/reddit-discord-feed target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
-    - name: Update release artifact
-      uses: johnwbyrd/update-release@v1
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/')
       with:
         tag: ${{ env.TAG_NAME }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        files: target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
+        files:  target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
+        
+    # - name: release  
+    #   uses: actions/create-release@v1
+    #   id: create_release
+    #   with:
+    #     draft: true
+    #     prerelease: false
+    #     release_name: ${{ env.TAG_NAME }}
+    #     tag_name: ${{ env.TAG_NAME }}
+    #     body_path: CHANGELOG.md
+    #   env:
+    #     GITHUB_TOKEN: ${{ github.token }}
+          
+    # - name: Update release artifact
+    #   uses: johnwbyrd/update-release@v1
+    #   with:
+    #     tag: ${{ env.TAG_NAME }}
+    #     token: ${{ secrets.GITHUB_TOKEN }}
+    #     files: target/${{ matrix.BUILD_TARGET }}/feed-${{ env.TAG_NAME }}
