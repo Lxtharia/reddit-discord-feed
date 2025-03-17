@@ -41,6 +41,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with: 
+        ref: ${{ env.TAG_NAME }}
     - name: Show Rustup Info
       run: rustup show
       
